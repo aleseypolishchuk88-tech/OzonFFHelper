@@ -22,7 +22,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 
 # --- НАСТРОЙКА РЕПОЗИТОРИЯ (заполняется после создания репозитория на GitHub) ---
-REPO_OWNER = ""  # напр. "alexey-polishchuk"
+REPO_OWNER = "aleseypolishchuk88-tech"
 REPO_NAME = "OzonFFHelper"
 BRANCH = "main"
 
