@@ -21,6 +21,15 @@ if errorlevel 1 (
     "%PYEXE%" -m pip install -r requirements.txt
 )
 
+REM Skip Streamlit first-run email prompt
+if not exist "%USERPROFILE%\.streamlit\credentials.toml" (
+    if not exist "%USERPROFILE%\.streamlit" mkdir "%USERPROFILE%\.streamlit"
+    (
+        echo [general]
+        echo email = ""
+    ) > "%USERPROFILE%\.streamlit\credentials.toml"
+)
+
 echo Checking for updates...
 "%PYEXE%" updater.py
 
