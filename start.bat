@@ -33,7 +33,7 @@ if not exist "%USERPROFILE%\.streamlit\credentials.toml" (
 echo Checking for updates...
 "%PYEXE%" updater.py
 
-echo Starting OzonFFHelper. Browser will open at http://localhost:8501
+echo Starting OzonFFHelper. Browser will open at http://localhost:8503
 echo Do not close this window while you work.
-"%PYEXE%" -m streamlit run app.py
+"%PYEXE%" -m streamlit run app.py --server.port 8503
 pause
