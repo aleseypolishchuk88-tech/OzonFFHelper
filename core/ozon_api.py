@@ -303,6 +303,7 @@ class OzonClient:
             if s.get("supply_id")
         ]
         cluster_id = next((s.macrolocal_cluster_id for s in supplies if s.macrolocal_cluster_id), None)
+        ts = (o.get("timeslot") or {}).get("timeslot") or {}
         return SupplyOrder(
             order_id=o.get("order_id"),
             order_number=str(o.get("order_number") or ""),
@@ -312,4 +313,5 @@ class OzonClient:
             created_date=o.get("created_date"),
             data_filling_deadline=o.get("data_filling_deadline"),
             cluster_id=cluster_id,
+            timeslot_from=ts.get("from"),
         )

@@ -7,16 +7,22 @@
 from __future__ import annotations
 
 import io
+import subprocess
+import sys
 import zipfile
 from datetime import date
+from pathlib import Path
 
 import pandas as pd
 import streamlit as st
+
+PROJECT_DIR = Path(__file__).resolve().parent
 
 from core import oprihodovanie as op
 from core import orchestrator
 from core.cargoes import compare_opis_to_content
 from core.config import load_settings, mask_key, save_credentials
+from core.desktop import reveal_in_explorer, save_to_desktop
 from core.opis_parser import OpisParseError, parse_opis
 from core.ozon_api import WORKABLE_STATES, OzonAPIError, OzonClient
 
@@ -48,6 +54,29 @@ def fetch_content(client_id: str, api_key: str, api_base: str, order_number: str
 def order_label(o) -> str:
     state = _STATE_RU.get(o.state, o.state)
     return f"№{o.order_number} · {o.cluster_label} · {o.delivery_type_label} · {state}"
+
+
+def offer_save(name: str, data: bytes, key: str) -> None:
+    """Сохранить результат: на рабочий стол (надёжно) либо через браузер."""
+    c1, c2 = st.columns([1, 1])
+
+    if c1.button("💾 Сохранить на рабочий стол", key=f"save_{key}", type="primary"):
+        try:
+            path = save_to_desktop(name, data)
+            st.session_state[f"saved_{key}"] = str(path)
+        except Exception as e:  # noqa
+            st.error(f"Не удалось сохранить: {e}")
+
+    c2.download_button(
+        "⬇️ Скачать через браузер",
+        data=data, file_name=name, mime="application/zip", key=f"dl_{key}",
+    )
+
+    saved = st.session_state.get(f"saved_{key}")
+    if saved:
+        st.success(f"Сохранено на рабочий стол: **{Path(saved).name}**")
+        if st.button("📂 Показать файл в папке", key=f"reveal_{key}"):
+            reveal_in_explorer(Path(saved))
 
 
 def is_ivanovo_okruzhnaya(o) -> bool:
@@ -205,10 +234,7 @@ def tab_oprihodovanie(settings, cart_orders):
     z = st.session_state.get("oprih_zip")
     if z:
         st.success(f"Готово: {z['count']} файлов оприходования.")
-        st.download_button(
-            f"⬇️ Скачать {z['name']}",
-            data=z["data"], file_name=z["name"], mime="application/zip", type="primary",
-        )
+        offer_save(z["name"], z["data"], key="oprih")
 
 
 # --- вкладка 2: Этикетки по описи -------------------------------------------
@@ -321,13 +347,36 @@ def tab_labels(settings, cart_orders):
         for w in result["warnings"]:
             st.warning(w)
         st.success(f"Готово: {len(result['files'])} этикеток — {', '.join(result['files'])}")
-        st.download_button(
-            f"⬇️ Скачать {result['name']}",
-            data=result["data"],
-            file_name=result["name"],
-            mime="application/zip",
-            type="primary",
-        )
+        offer_save(result["name"], result["data"], key="labels")
+
+
+# --- вкладка 3: Дублирование в migfull (ФФ) ---------------------------------
+
+
+def tab_migfull(settings, cart_orders):
+    st.subheader("Дублирование поставок в программе ФФ (migfull)")
+    if not cart_orders:
+        st.info("Добавьте поставки в корзину выше.")
+        return
+    st.caption(
+        "По каждой поставке откроется окно Edge с уже заполненными датами и номером Ozon. "
+        "Вам останется выбрать выпадашки (Тип поставки, Площадка, Доставка, Доставить до, "
+        "Конечный пункт), нажать «Создать» и загрузить Оприходование, затем закрыть окно."
+    )
+    st.warning("Открывайте по одной: создали отгрузку → закрыли окно → открываете следующую.")
+
+    done = st.session_state.setdefault("mig_done", set())
+    for o in cart_orders:
+        c1, c2, c3 = st.columns([5, 1, 1])
+        mark = "✅ " if o.order_number in done else ""
+        c1.write(mark + order_label(o))
+        if c2.button("🌐 Открыть", key=f"mig_open_{o.order_number}"):
+            subprocess.Popen([sys.executable, "migfull_open.py", o.order_number], cwd=str(PROJECT_DIR))
+            st.success(f"Открываю migfull для №{o.order_number}. Заполните и закройте окно.")
+        if c3.checkbox("сделано", value=o.order_number in done, key=f"mig_done_{o.order_number}"):
+            done.add(o.order_number)
+        else:
+            done.discard(o.order_number)
 
 
 # --- основной экран ---------------------------------------------------------
@@ -367,11 +416,13 @@ def render_main(settings):
     cart_orders = render_cart(orders)
     st.divider()
 
-    t1, t2 = st.tabs(["📋 Оприходование", "🏷 Этикетки по описи"])
+    t1, t2, t3 = st.tabs(["📋 Оприходование", "🏷 Этикетки по описи", "🌐 Дублировать в migfull"])
     with t1:
         tab_oprihodovanie(settings, cart_orders)
     with t2:
         tab_labels(settings, cart_orders)
+    with t3:
+        tab_migfull(settings, cart_orders)
 
 
 # --- точка входа ------------------------------------------------------------

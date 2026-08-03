@@ -105,6 +105,12 @@ class SupplyOrder(BaseModel):
     data_filling_deadline: str | None = None
     cluster_id: int | None = None
     cluster_name: str | None = None
+    timeslot_from: str | None = None  # ISO, напр. 2026-06-19T14:00:00Z
+
+    @property
+    def timeslot_date(self) -> str:
+        """Дата таймслота YYYY-MM-DD (для формы migfull)."""
+        return (self.timeslot_from or self.data_filling_deadline or "")[:10]
 
     @property
     def warehouse_name(self) -> str:
