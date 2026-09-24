@@ -7,7 +7,7 @@
 - Ядро: `core/` — `opis_parser.py` (парсинг описи), `cargoes.py` (грузоместа), `ozon_api.py` (supply-order/cargoes/cargoes-label), `orchestrator.py`, `oprihodovanie.py`, `migfull_rpa.py`.
 - Правила домена: PAC = короб; состав грузоместа по числу ШК; ФФ опознаёт товар ТОЛЬКО по ШК (`OZN<sku>` = баркод). Справочник: память `ozon-ff-cargo-rules`, `ozon-fbo-cargoes-reference` (в бэкапе `_claude/memory/`).
 - Грабли API: редактировать состав ГМ нельзя — только удалить+пересоздать (cargo_id меняются!); имена складов сравнивать без учёта регистра.
-- Открытый хвост: Шаг 2б — запись грузомест (`create_cargoes`) заглушка; этикетки шаги 4–5 — доделать.
+- Цикл собран целиком (сверено с кодом 24.09.2026): грузоместа `create_cargoes` и этикетки `request_labels` → `get_labels_status` → `download_label_file` в `core/ozon_api.py`, порядок шагов в `core/orchestrator.py`.
 - Разработка по шагам, каждый шаг обкатывается перед следующим (правило пользователя).
 - Ключи Ozon — в `D:\Клод Код\.env`.
 
