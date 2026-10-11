@@ -176,6 +176,9 @@ def parse_opis(source: Union[str, Path, IO[bytes]]) -> Opis:
         if low.startswith("итог"):
             break
         if PAC_RE.match(code):
+            if any(b.pac_code == code.upper() for b in boxes):
+                # Ozon получил бы два грузоместа с одним key, а этикетки затёрли бы друг друга.
+                raise OpisParseError(f"Короб {code.upper()} встречается в описи дважды")
             current = Box(
                 pac_code=code.upper(),
                 products=[],
@@ -200,6 +203,13 @@ def parse_opis(source: Union[str, Path, IO[bytes]]) -> Opis:
                     characteristic=str(char).strip() if char else None,
                     quantity=qty,
                 )
+            )
+        elif _to_int(cell(row, "quantity")):
+            # Строка с количеством, но код не PAC и не OZN (опечатка, пробел, «0ZN»):
+            # молча пропустить нельзя, товар выпал бы из грузомест.
+            raise OpisParseError(
+                f"Не распознан код «{code}» в строке с количеством "
+                f"{_to_int(cell(row, 'quantity'))}: ожидается PAC<цифры> или OZN<цифры>"
             )
         # прочие строки (пустые служебные) — пропускаем
 

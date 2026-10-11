@@ -1,8 +1,10 @@
 """OzonFFHelper — Streamlit UI.
 
-Две вкладки по бизнес-процессу:
-  1. «Оприходование» — поставка из Ozon → её состав → XLSX для ФФ (отправка в ТГ).
-  2. «Этикетки по описи» — опись от ФФ → грузоместа + этикетки (запись в Ozon — Шаг 2б, пока заглушка).
+Корзина поставок и три вкладки по бизнес-процессу:
+  1. «Оприходование»: состав поставки из Ozon → XLSX для ФФ (отправка в ТГ).
+  2. «Этикетки по описи»: опись от ФФ → сверка с заявкой → грузоместа и этикетки в Ozon
+     (ЗАПИСЬ в ЛК, core/orchestrator.py) → ZIP с именами PAC.
+  3. «Дублировать в migfull»: гибрид, робот вписывает даты и номер в форму ФФ (core/migfull_rpa.py).
 """
 from __future__ import annotations
 
@@ -20,7 +22,7 @@ PROJECT_DIR = Path(__file__).resolve().parent
 
 from core import oprihodovanie as op
 from core import orchestrator
-from core.cargoes import compare_opis_to_content
+from core.cargoes import compare_opis_to_content, content_increase_issues
 from core.config import load_settings, mask_key, save_credentials
 from core.desktop import reveal_in_explorer, save_to_desktop
 from core.opis_parser import OpisParseError, parse_opis
@@ -292,24 +294,36 @@ def tab_labels(settings, cart_orders):
             items = fetch_content(
                 settings.client_id, settings.api_key, settings.api_base, order.order_number
             )
-            issues = compare_opis_to_content(opis, items)
         except OzonAPIError as e:
-            issues = []
-            st.warning(f"Не удалось сверить состав с Ozon: {e}")
+            items = None
+            st.error(f"⚠ Не удалось сверить состав описи с заявкой в Ozon: {e}")
+            can_run = st.checkbox(
+                "Продолжить без сверки (состав заявки и грузомест может не совпасть, Ozon возьмёт доплату).",
+                key="lbl_nocheck",
+            )
+        issues = compare_opis_to_content(opis, items) if items is not None else []
         if issues:
             st.error("⚠ Состав описи не совпадает с составом заявки в Ozon:")
             for i in issues:
                 st.markdown(f"- {i}")
+            increases = content_increase_issues(opis, items)
             can_run = st.checkbox(
-                "Подтверждаю: опись верна (состав меняли вручную). Привести заявку к описи и продолжить.",
+                "Подтверждаю: опись верна (состав меняли вручную). Продолжить.",
                 key="lbl_override",
             )
-            if can_run:
-                st.info(
-                    "При запуске состав заявки в Ozon будет приведён к описи, "
-                    "затем созданы грузоместа — состав заявки и грузомест совпадут (без доплаты)."
+            if can_run and increases:
+                st.warning(
+                    "В описи больше, чем в заявке, а увеличить заявку Ozon не даёт. Грузоместа "
+                    "будут созданы по описи, состав заявки останется прежним: составы НЕ совпадут, "
+                    "возможна доплата. Чтобы её не было, сначала поправьте заявку в ЛК Ozon."
                 )
-        else:
+            elif can_run:
+                st.info(
+                    "При запуске состав заявки в Ozon будет уменьшен под опись, затем созданы "
+                    "грузоместа. Если ключу не хватит роли «Supply order», заявка останется "
+                    "прежней, программа предупредит."
+                )
+        elif items is not None:
             st.success("✅ Состав описи совпадает с составом заявки.")
 
     st.caption(

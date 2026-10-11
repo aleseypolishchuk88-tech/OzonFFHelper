@@ -157,10 +157,31 @@ def process(
     used_pac = set()
     for i, page in enumerate(reader.pages):
         text = (page.extract_text() or "").replace(" ", "").replace("\n", "")
-        pac = next((p for cid, p in pac_by_cargo.items() if cid in text), None)
-        name = f"{pac}.pdf" if pac else f"стр_{i + 1}.pdf"
-        if pac:
+        # cargo_id печатается с пробелами, поэтому ищем подстрокой в тексте без пробелов.
+        # Совпадение должно быть ровно одно: иначе страницу не угадываем, а помечаем.
+        hits = sorted({p for cid, p in pac_by_cargo.items() if cid in text})
+        pac = hits[0] if len(hits) == 1 else None
+        if len(hits) > 1:
+            res.warnings.append(
+                f"Страница {i + 1}: подходит сразу несколько коробов ({', '.join(hits)}), "
+                f"сохранена как стр_{i + 1}.pdf, проверьте вручную"
+            )
+        elif pac in used_pac:
+            res.warnings.append(
+                f"Страница {i + 1}: короб {pac} уже встречался на другой странице, "
+                f"сохранена как {pac}_{i + 1}.pdf"
+            )
+        elif pac is None:
+            res.warnings.append(
+                f"Страница {i + 1}: не найден ни один короб описи, сохранена как стр_{i + 1}.pdf"
+            )
+        if pac and pac in used_pac:
+            name = f"{pac}_{i + 1}.pdf"
+        elif pac:
+            name = f"{pac}.pdf"
             used_pac.add(pac)
+        else:
+            name = f"стр_{i + 1}.pdf"
         writer = PdfWriter()
         writer.add_page(page)
         buf = io.BytesIO()

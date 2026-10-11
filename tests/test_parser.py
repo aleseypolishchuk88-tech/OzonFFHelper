@@ -58,3 +58,29 @@ def test_bad_file_raises(tmp_path):
     openpyxl.Workbook().save(empty)
     with pytest.raises(OpisParseError):
         parse_opis(empty)
+
+
+def _fixture_copy(tmp_path, edits):
+    import openpyxl
+
+    wb = openpyxl.load_workbook(FIXTURE)
+    ws = wb.active
+    for coord, val in edits.items():
+        ws[coord].value = val
+    path = tmp_path / "opis.xlsx"
+    wb.save(path)
+    return path
+
+
+def test_duplicate_pac_raises(tmp_path):
+    # второй короб назван так же, как первый
+    path = _fixture_copy(tmp_path, {"A15": "PAC100000001"})
+    with pytest.raises(OpisParseError, match="дважды"):
+        parse_opis(path)
+
+
+def test_unrecognized_code_with_quantity_raises(tmp_path):
+    # опечатка в коде товара: товар не должен молча выпасть
+    path = _fixture_copy(tmp_path, {"A16": "0ZN100000002"})
+    with pytest.raises(OpisParseError, match="0ZN100000002"):
+        parse_opis(path)
